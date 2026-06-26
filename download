@@ -3,7 +3,7 @@ __pycache__/
 .env
 .venv/
 
-# Large generated data files: keep as GitHub Actions artifacts, not Git commits.
+# Large generated data files. The full panel is uploaded as a GitHub Actions artifact.
 data/daily_prices.csv.gz
 data/raw_download_cache/
 outputs/raw_monthly_panel.csv
