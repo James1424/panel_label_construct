@@ -3,7 +3,7 @@ import pandas as pd
 from .config import (
     README_FILE, SOURCE_ETFS_FILE, SEED_UNIVERSE_FILE, RAW_PANEL_FILE, CLEAN_PANEL_FILE,
     FEATURE_MISSING_REPORT_FILE, DROPPED_FEATURES_FILE, PANEL_SUMMARY_FILE,
-    LABEL_SUMMARY_FILE, LABEL_BY_MONTH_FILE, LATEST_PANEL_SAMPLE_FILE, MODEL_DESIGN_SAMPLE_FILE,
+    LABEL_SUMMARY_FILE, LABEL_BY_MONTH_FILE, LATEST_PANEL_SAMPLE_FILE, MODEL_DESIGN_SAMPLE_FILE, PANEL_HEAD_20000_FILE,
 )
 from .feature_groups import LABEL_COLUMNS
 
@@ -146,8 +146,18 @@ def main() -> None:
             lines.append(table(show))
         lines.append("")
 
+    if PANEL_HEAD_20000_FILE.exists():
+        try:
+            head_sample = pd.read_csv(PANEL_HEAD_20000_FILE, nrows=0)
+            lines.append("## Committed first-20k panel slice")
+            lines.append("`outputs/panel_head_20000.csv` contains the first 20,000 rows of the cleaned panel. It is committed for quick inspection and future model-design reference; the full panel remains in the GitHub Actions artifact.")
+            lines.append(f"Columns in slice: {len(head_sample.columns):,}")
+            lines.append("")
+        except Exception:
+            pass
+
     if MODEL_DESIGN_SAMPLE_FILE.exists():
-        design = pd.read_csv(MODEL_DESIGN_SAMPLE_FILE, parse_dates=["month"]).head(40)
+        design = pd.read_csv(MODEL_DESIGN_SAMPLE_FILE, PANEL_HEAD_20000_FILE, parse_dates=["month"]).head(40)
         lines.append("## Model-design panel sample")
         lines.append("This small committed sample contains historical labeled rows and recent examples for model-design inspection. The full panel is uploaded as a GitHub Actions artifact.")
         keep = [

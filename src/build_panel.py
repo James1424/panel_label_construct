@@ -5,7 +5,7 @@ from .config import (
     DAILY_PRICES_FILE, SEED_UNIVERSE_FILE, RAW_PANEL_FILE, CLEAN_PANEL_FILE,
     FEATURE_MISSING_REPORT_FILE, DROPPED_FEATURES_FILE, FEATURE_MANIFEST_FILE,
     PANEL_SUMMARY_FILE, LABEL_SUMMARY_FILE, LABEL_BY_MONTH_FILE, LATEST_PANEL_SAMPLE_FILE,
-    MODEL_DESIGN_SAMPLE_FILE, OUTPUT_DIR, FIRST_SAMPLE_MONTH, BENCHMARK,
+    MODEL_DESIGN_SAMPLE_FILE, PANEL_HEAD_20000_FILE, OUTPUT_DIR, FIRST_SAMPLE_MONTH, BENCHMARK,
     MAX_FEATURE_MISSING_RATE, MIN_FEATURE_NON_NULL_ROWS,
     TAIL_TOP10_Q, TAIL_TOP5_Q, BOOM30, BOOM40, BOOM50, MEGA100,
     LARGE_MOVE_ABS_THRESHOLD, UP_BIG_MOVE_THRESHOLD, DOWN_BIG_MOVE_THRESHOLD,
@@ -483,6 +483,11 @@ def build_panel() -> pd.DataFrame:
     clean, kept_features, missing_report, dropped = _filter_missing(raw, candidate_features)
     clean = clean.sort_values(["month", "ticker"]).reset_index(drop=True)
     clean.to_csv(CLEAN_PANEL_FILE, index=False)
+
+    # A committed modeling reference slice. The full panel is uploaded as an artifact,
+    # while this first-20k-row sample stays small enough for GitHub and future model design.
+    clean.head(20000).to_csv(PANEL_HEAD_20000_FILE, index=False)
+
     missing_report.to_csv(FEATURE_MISSING_REPORT_FILE, index=False)
     dropped.to_csv(DROPPED_FEATURES_FILE, index=False)
     _write_manifest(clean, kept_features, dropped)
