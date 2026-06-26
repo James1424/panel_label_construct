@@ -86,8 +86,26 @@ def fetch_csv_tickers(url: str) -> list[str]:
     return []
 
 
+def _read_html_tables_with_headers(url: str) -> list[pd.DataFrame]:
+    """Read HTML tables through requests with browser-like headers.
+
+    GitHub Actions and other cloud runners are often blocked by sites such as
+    Wikipedia when pandas opens the URL directly without a User-Agent.
+    Downloading the HTML first with requests makes the holdings builder much
+    more robust and keeps source failures non-fatal.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ETFPanelBuilder/1.0; +https://github.com/James1424/panel_label_construct)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    r = requests.get(url, headers=headers, timeout=45)
+    r.raise_for_status()
+    return pd.read_html(io.StringIO(r.text))
+
+
 def fetch_wikipedia_sp500() -> list[str]:
-    tables = pd.read_html(WIKI_SP500)
+    tables = _read_html_tables_with_headers(WIKI_SP500)
     for df in tables:
         if "Symbol" in df.columns:
             return [t for t in (normalize_ticker(x) for x in df["Symbol"]) if t]
@@ -95,7 +113,7 @@ def fetch_wikipedia_sp500() -> list[str]:
 
 
 def fetch_wikipedia_ndx() -> list[str]:
-    tables = pd.read_html(WIKI_NDX)
+    tables = _read_html_tables_with_headers(WIKI_NDX)
     best = []
     for df in tables:
         ticks = extract_tickers_from_table(df)
@@ -107,8 +125,12 @@ def fetch_wikipedia_ndx() -> list[str]:
 def get_source_tickers(etf: str, provider_hint: str) -> tuple[list[str], str]:
     etf = etf.upper()
     if etf == "SPY" or provider_hint == "wikipedia_sp500":
-        ticks = fetch_wikipedia_sp500()
-        return ticks, "wikipedia_sp500"
+        try:
+            ticks = fetch_wikipedia_sp500()
+            return ticks, "wikipedia_sp500"
+        except Exception as exc:
+            print(f"Warning: Wikipedia S&P 500 fetch failed for {etf}: {exc}")
+            return [], "failed_wikipedia_sp500"
     if etf == "QQQ":
         # Prefer official Invesco, fallback Wikipedia NDX.
         for url in HOLDINGS_URLS.get(etf, []):
@@ -118,7 +140,11 @@ def get_source_tickers(etf: str, provider_hint: str) -> tuple[list[str], str]:
                     return ticks, "invesco_csv"
             except Exception:
                 pass
-        return fetch_wikipedia_ndx(), "wikipedia_nasdaq100_fallback"
+        try:
+            return fetch_wikipedia_ndx(), "wikipedia_nasdaq100_fallback"
+        except Exception as exc:
+            print(f"Warning: Wikipedia Nasdaq-100 fallback failed for {etf}: {exc}")
+            return [], "failed_wikipedia_nasdaq100"
     if etf.startswith("ARK") and etf in ARK_NAME:
         url = ARK_URL_TEMPLATE.format(name=ARK_NAME[etf], ticker=etf)
         try:
