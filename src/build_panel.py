@@ -5,7 +5,7 @@ from .config import (
     DAILY_PRICES_FILE, SEED_UNIVERSE_FILE, RAW_PANEL_FILE, CLEAN_PANEL_FILE,
     FEATURE_MISSING_REPORT_FILE, DROPPED_FEATURES_FILE, FEATURE_MANIFEST_FILE,
     PANEL_SUMMARY_FILE, LABEL_SUMMARY_FILE, LABEL_BY_MONTH_FILE, LATEST_PANEL_SAMPLE_FILE,
-    OUTPUT_DIR, FIRST_SAMPLE_MONTH, BENCHMARK,
+    MODEL_DESIGN_SAMPLE_FILE, OUTPUT_DIR, FIRST_SAMPLE_MONTH, BENCHMARK,
     MAX_FEATURE_MISSING_RATE, MIN_FEATURE_NON_NULL_ROWS,
     TAIL_TOP10_Q, TAIL_TOP5_Q, BOOM30, BOOM40, BOOM50, MEGA100,
     LARGE_MOVE_ABS_THRESHOLD, UP_BIG_MOVE_THRESHOLD, DOWN_BIG_MOVE_THRESHOLD,
@@ -257,6 +257,75 @@ def _write_manifest(panel: pd.DataFrame, kept_features: list[str], dropped: pd.D
     FEATURE_MANIFEST_FILE.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _sample_with_source(df: pd.DataFrame, source: str) -> pd.DataFrame:
+    out = df.copy()
+    out.insert(0, "sample_source", source)
+    return out
+
+
+def _write_model_design_sample(clean: pd.DataFrame) -> None:
+    parts = []
+    if clean.empty:
+        pd.DataFrame().to_csv(MODEL_DESIGN_SAMPLE_FILE, index=False)
+        return
+
+    panel = clean.copy()
+    panel["month"] = pd.to_datetime(panel["month"])
+
+    # 1) Latest rows: helpful for checking what a live prediction month looks like.
+    latest_month = panel["month"].max()
+    latest = panel[panel["month"] == latest_month].sort_values("ticker").head(80)
+    if not latest.empty:
+        parts.append(_sample_with_source(latest, "latest_month_unlabeled_or_partially_labeled"))
+
+    # 2) Recent labeled months: include both top tail names and ordinary non-tail names.
+    if "future_max_return_1_3m" in panel.columns:
+        labeled = panel[panel["future_max_return_1_3m"].notna()].copy()
+    else:
+        labeled = pd.DataFrame()
+
+    if not labeled.empty:
+        recent_months = sorted(labeled["month"].dropna().unique())[-12:]
+        recent = labeled[labeled["month"].isin(recent_months)]
+        for month, g in recent.groupby("month", sort=True):
+            top_tail = g.sort_values("future_max_return_1_3m", ascending=False).head(10)
+            ordinary = g[g.get("label_top10_1_3m", 0).fillna(0).astype(int) == 0].sort_values("ticker").head(10)
+            if not top_tail.empty:
+                parts.append(_sample_with_source(top_tail, "recent_month_top_future_return"))
+            if not ordinary.empty:
+                parts.append(_sample_with_source(ordinary, "recent_month_non_top10_control"))
+
+        # 3) Extreme historical positive examples for tail-event modeling.
+        for label, source, n in [
+            ("label_mega100_1_3m", "historical_mega100_examples", 120),
+            ("label_boom50_top5_1_3m", "historical_boom50_top5_examples", 120),
+            ("label_boom30_top10_1_3m", "historical_boom30_top10_examples", 120),
+        ]:
+            if label in labeled.columns:
+                pos = labeled[labeled[label].fillna(0).astype(int) == 1]
+                pos = pos.sort_values("future_max_return_1_3m", ascending=False).head(n)
+                if not pos.empty:
+                    parts.append(_sample_with_source(pos, source))
+
+        # 4) Yearly top examples across the whole backtest period.
+        yearly_parts = []
+        for year, g in labeled.groupby(labeled["month"].dt.year):
+            yearly_parts.append(g.sort_values("future_max_return_1_3m", ascending=False).head(8))
+        if yearly_parts:
+            parts.append(_sample_with_source(pd.concat(yearly_parts, ignore_index=True), "yearly_top_future_return_examples"))
+
+    if parts:
+        sample = pd.concat(parts, ignore_index=True)
+        sample = sample.drop_duplicates(["month", "ticker"], keep="first")
+        sample = sample.sort_values(["month", "sample_source", "ticker"]).reset_index(drop=True)
+    else:
+        sample = panel.head(200).copy()
+        sample.insert(0, "sample_source", "fallback_first_rows")
+
+    # Keep the file small enough for normal GitHub browsing.
+    sample.head(1000).to_csv(MODEL_DESIGN_SAMPLE_FILE, index=False)
+
+
 def _write_summaries(raw: pd.DataFrame, clean: pd.DataFrame, missing_report: pd.DataFrame, dropped: pd.DataFrame) -> None:
     labels = [c for c in LABEL_COLUMNS if c.startswith("label_") and c in raw.columns]
     rows = []
@@ -297,8 +366,16 @@ def _write_summaries(raw: pd.DataFrame, clean: pd.DataFrame, missing_report: pd.
         ],
     })
     summary.to_csv(PANEL_SUMMARY_FILE, index=False)
+
+    # Latest rows are useful for live prediction inspection, but their future labels
+    # are usually blank. Keep this small file in GitHub for quick README display.
     latest = clean[clean["month"] == clean["month"].max()].copy().head(100)
     latest.to_csv(LATEST_PANEL_SAMPLE_FILE, index=False)
+
+    # A richer, repository-friendly sample for model design and debugging.
+    # It intentionally includes historical rows with realized future returns / labels,
+    # plus a latest-month slice. The full panel remains an Actions artifact.
+    _write_model_design_sample(clean)
 
 
 def build_panel() -> pd.DataFrame:

@@ -18,6 +18,7 @@ PANEL_SUMMARY_FILE = OUTPUT_DIR / "panel_summary.csv"
 LABEL_SUMMARY_FILE = OUTPUT_DIR / "label_summary.csv"
 LABEL_BY_MONTH_FILE = OUTPUT_DIR / "label_distribution_by_month.csv"
 LATEST_PANEL_SAMPLE_FILE = OUTPUT_DIR / "latest_panel_sample.csv"
+MODEL_DESIGN_SAMPLE_FILE = OUTPUT_DIR / "model_design_panel_sample.csv"
 README_FILE = PROJECT_ROOT / "README.md"
 
 START_DATE = "2014-01-01"

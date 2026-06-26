@@ -3,7 +3,7 @@ import pandas as pd
 from .config import (
     README_FILE, SOURCE_ETFS_FILE, SEED_UNIVERSE_FILE, RAW_PANEL_FILE, CLEAN_PANEL_FILE,
     FEATURE_MISSING_REPORT_FILE, DROPPED_FEATURES_FILE, PANEL_SUMMARY_FILE,
-    LABEL_SUMMARY_FILE, LABEL_BY_MONTH_FILE, LATEST_PANEL_SAMPLE_FILE,
+    LABEL_SUMMARY_FILE, LABEL_BY_MONTH_FILE, LATEST_PANEL_SAMPLE_FILE, MODEL_DESIGN_SAMPLE_FILE,
 )
 from .feature_groups import LABEL_COLUMNS
 
@@ -144,6 +144,29 @@ def main() -> None:
                 if c in show.columns:
                     show[c] = show[c].map(fmt_pct)
             lines.append(table(show))
+        lines.append("")
+
+    if MODEL_DESIGN_SAMPLE_FILE.exists():
+        design = pd.read_csv(MODEL_DESIGN_SAMPLE_FILE, parse_dates=["month"]).head(40)
+        lines.append("## Model-design panel sample")
+        lines.append("This small committed sample contains historical labeled rows and recent examples for model-design inspection. The full panel is uploaded as a GitHub Actions artifact.")
+        keep = [
+            "sample_source", "month", "ticker", "adj_close", "mom_3m", "mom_6m", "core_mom_456_avg",
+            "avg_dollar_volume_3m", "large_move_freq_6m", "up_big_move_freq_6m",
+            "liquid_vol_score", "future_max_return_1_3m", "label_top10_1_3m",
+            "label_boom30_top10_1_3m", "label_boom50_top5_1_3m", "label_mega100_1_3m",
+        ]
+        keep = [c for c in keep if c in design.columns]
+        show = design[keep].copy()
+        if "month" in show.columns:
+            show["month"] = show["month"].dt.strftime("%Y-%m-%d")
+        for c in show.columns:
+            if c not in ["sample_source", "month", "ticker"]:
+                if c.startswith(("mom_", "core_", "large_", "up_", "liquid_", "future_")):
+                    show[c] = show[c].map(fmt_pct)
+                elif "dollar" in c:
+                    show[c] = show[c].map(fmt_num)
+        lines.append(table(show))
         lines.append("")
 
     if LATEST_PANEL_SAMPLE_FILE.exists():
