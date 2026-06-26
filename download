@@ -2,6 +2,12 @@ __pycache__/
 *.pyc
 .env
 .venv/
+
+# Large generated data files: keep as GitHub Actions artifacts, not Git commits.
 data/daily_prices.csv.gz
 data/raw_download_cache/
+outputs/raw_monthly_panel.csv
+outputs/clean_monthly_panel.csv
+outputs/*.parquet
+outputs/*.pkl
 outputs/*.xlsx
