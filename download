@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+data/daily_prices.csv.gz
+data/raw_download_cache/
+outputs/*.xlsx
