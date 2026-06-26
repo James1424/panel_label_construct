@@ -157,7 +157,7 @@ def main() -> None:
             pass
 
     if MODEL_DESIGN_SAMPLE_FILE.exists():
-        design = pd.read_csv(MODEL_DESIGN_SAMPLE_FILE, PANEL_HEAD_20000_FILE, parse_dates=["month"]).head(40)
+        design = pd.read_csv(MODEL_DESIGN_SAMPLE_FILE, parse_dates=["month"]).head(40)
         lines.append("## Model-design panel sample")
         lines.append("This small committed sample contains historical labeled rows and recent examples for model-design inspection. The full panel is uploaded as a GitHub Actions artifact.")
         keep = [
